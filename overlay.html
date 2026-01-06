@@ -7,7 +7,7 @@
   <style>
     :root{
       --green: #9cff57;
-      --bgAlpha: 0; /* transparent by default */
+      --bgAlpha: 0;
       --skullSize: 140px;
     }
     html,body{
@@ -18,8 +18,6 @@
       overflow:hidden;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
-
-    /* container */
     .wrap{
       position:relative;
       width:100%;
@@ -33,8 +31,6 @@
       text-shadow: 0 0 10px rgba(156,255,87,.35);
       filter: saturate(1.1) contrast(1.05);
     }
-
-    /* skull */
     .skull{
       width: var(--skullSize);
       height: var(--skullSize);
@@ -46,8 +42,6 @@
       filter: drop-shadow(0 0 10px rgba(156,255,87,.25));
       opacity: .95;
     }
-
-    /* number */
     .count{
       font-size: 96px;
       line-height: 1;
@@ -61,21 +55,14 @@
       margin-top: 6px;
       letter-spacing: .18em;
     }
-    .stack{
-      display:flex;
-      flex-direction:column;
-    }
+    .stack{ display:flex; flex-direction:column; }
 
     /* CRT overlays */
     .crt::before{
       content:"";
       pointer-events:none;
       position:absolute; inset:0;
-      background:
-        linear-gradient(to bottom,
-          rgba(0,0,0,0) 0%,
-          rgba(0,0,0,.12) 50%,
-          rgba(0,0,0,0) 100%);
+      background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,.12) 50%, rgba(0,0,0,0) 100%);
       opacity:.35;
       mix-blend-mode: multiply;
     }
@@ -83,23 +70,13 @@
       content:"";
       pointer-events:none;
       position:absolute; inset:0;
-      background:
-        repeating-linear-gradient(
-          to bottom,
-          rgba(0,0,0,0) 0px,
-          rgba(0,0,0,0) 2px,
-          rgba(0,0,0,.18) 3px
-        );
+      background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,.18) 3px);
       opacity:.28;
       mix-blend-mode: multiply;
       animation: scan 5.5s linear infinite;
     }
-    @keyframes scan{
-      0%{ transform: translateY(0); }
-      100%{ transform: translateY(6px); }
-    }
+    @keyframes scan{ 0%{ transform: translateY(0); } 100%{ transform: translateY(6px); } }
 
-    /* animated noise */
     .noise{
       pointer-events:none;
       position:absolute; inset:0;
@@ -116,23 +93,30 @@
       75%{ transform: translate(0px,1px); }
       100%{ transform: translate(0,0); }
     }
-
-    /* vignette */
     .vignette{
       pointer-events:none;
       position:absolute; inset:-40px;
       background: radial-gradient(ellipse at center, rgba(0,0,0,0) 35%, rgba(0,0,0,.35) 100%);
       opacity:.55;
     }
-
-    /* tiny glitch flicker on update */
-    .flash{
-      animation: flash .18s ease-out 1;
-    }
+    .flash{ animation: flash .18s ease-out 1; }
     @keyframes flash{
       0%{ filter: brightness(1.0) contrast(1.0); transform: translateX(0); }
       50%{ filter: brightness(1.25) contrast(1.2); transform: translateX(1px); }
       100%{ filter: brightness(1.0) contrast(1.0); transform: translateX(0); }
+    }
+
+    .err{
+      position:absolute;
+      left:16px; bottom:10px;
+      font-size:12px;
+      opacity:.9;
+      color: rgba(255,180,180,.95);
+      text-shadow:none;
+      max-width: 92vw;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
     }
   </style>
 </head>
@@ -146,42 +130,56 @@
 
     <div class="noise"></div>
     <div class="vignette"></div>
+    <div class="err" id="err" style="display:none;"></div>
   </div>
+
+  <!-- Firebase (compat for speed/ease) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <script>
     const params = new URLSearchParams(location.search);
+    const dbUrl = params.get("db");
     const room = params.get("room") || "main";
-    const key = `deathCounter:${room}`;
 
-    const countEl = document.getElementById("count");
-    const wrap = document.getElementById("wrap");
-
-    function readCount(){
-      const raw = localStorage.getItem(key);
-      const n = Number(raw);
-      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
-    }
-
-    function setUI(n){
-      countEl.textContent = String(n);
-      wrap.classList.remove("flash");
-      // force reflow to restart animation
-      void wrap.offsetWidth;
-      wrap.classList.add("flash");
-    }
-
-    // init
-    setUI(readCount());
-
-    // live updates from controller (other tab/window)
-    window.addEventListener("storage", (e) => {
-      if (e.key === key) setUI(readCount());
-    });
-
-    // allow transparent=1
     if (params.get("transparent") === "0") {
       document.documentElement.style.setProperty("--bgAlpha", "0.35");
     }
+
+    const countEl = document.getElementById("count");
+    const wrap = document.getElementById("wrap");
+    const errEl = document.getElementById("err");
+
+    function setUI(n){
+      const safe = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+      countEl.textContent = String(safe);
+      wrap.classList.remove("flash"); void wrap.offsetWidth; wrap.classList.add("flash");
+    }
+
+    function showErr(msg){
+      errEl.style.display = "block";
+      errEl.textContent = msg;
+    }
+
+    if (!dbUrl) {
+      showErr("Missing ?db=YOUR_FIREBASE_RTD_B_URL");
+      setUI(0);
+      throw new Error("Missing db param");
+    }
+
+    // Init Firebase
+    firebase.initializeApp({ databaseURL: dbUrl });
+
+    const path = `rooms/${room}/deaths`;
+    const ref = firebase.database().ref(path);
+
+    // Live listener
+    ref.on("value", (snap) => {
+      const v = snap.val();
+      setUI(Number(v));
+    }, (err) => {
+      showErr("Firebase listen error: " + (err?.message || String(err)));
+    });
   </script>
 </body>
 </html>
