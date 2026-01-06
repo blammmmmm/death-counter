@@ -44,12 +44,13 @@
       font-size:12px;
       opacity:.9;
     }
+    .err{ margin-top:10px; font-size:12px; color:#ff9a9a; display:none; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="big">DEATH COUNTER CONTROLLER</div>
-    <div class="pill" id="roomTag"></div>
+    <div class="pill" id="tag"></div>
 
     <div class="count" id="count">0</div>
 
@@ -64,52 +65,69 @@
       <button id="setBtn">Set</button>
     </div>
 
+    <div class="err" id="err"></div>
+
     <div class="muted">
-      Reset requires typing <b>RESET</b> to confirm. This syncs instantly to the overlay as long as both are on the same GitHub Pages domain.
+      Works from phone/mod PC. Uses Firebase RTDB:
+      <span style="opacity:.9">/rooms/&lt;room&gt;/deaths</span>
     </div>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
   <script>
     const params = new URLSearchParams(location.search);
+    const dbUrl = params.get("db");
     const room = params.get("room") || "main";
-    const key = `deathCounter:${room}`;
 
+    const tag = document.getElementById("tag");
     const countEl = document.getElementById("count");
-    const roomTag = document.getElementById("roomTag");
-    roomTag.textContent = `room=${room}`;
+    const errEl = document.getElementById("err");
+    tag.textContent = `room=${room}`;
 
-    function read(){
-      const n = Number(localStorage.getItem(key));
-      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
-    }
-    function write(n){
-      localStorage.setItem(key, String(Math.max(0, Math.floor(n))));
-      render();
-    }
-    function render(){
-      countEl.textContent = String(read());
+    function showErr(msg){
+      errEl.style.display = "block";
+      errEl.textContent = msg;
     }
 
-    document.getElementById("plus").onclick = () => write(read() + 1);
-    document.getElementById("minus").onclick = () => write(read() - 1);
+    if (!dbUrl) {
+      showErr("Missing ?db=YOUR_FIREBASE_RTD_B_URL");
+      throw new Error("Missing db param");
+    }
 
-    document.getElementById("setBtn").onclick = () => {
+    firebase.initializeApp({ databaseURL: dbUrl });
+
+    const ref = firebase.database().ref(`rooms/${room}/deaths`);
+
+    // live display
+    ref.on("value", (snap) => {
+      const v = Number(snap.val());
+      countEl.textContent = String(Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0);
+    }, (err) => showErr("Listen error: " + (err?.message || String(err))));
+
+    // atomic increment/decrement (prevents race if multiple mods click)
+    function add(delta){
+      ref.transaction((cur) => {
+        const n = Number(cur);
+        const safe = Number.isFinite(n) ? n : 0;
+        return Math.max(0, Math.floor(safe + delta));
+      });
+    }
+
+    document.getElementById("plus").onclick = () => add(1);
+    document.getElementById("minus").onclick = () => add(-1);
+
+    document.getElementById("setBtn").onclick = async () => {
       const val = Number(document.getElementById("setInput").value);
       if (!Number.isFinite(val)) return;
-      write(val);
+      await ref.set(Math.max(0, Math.floor(val)));
     };
 
-    document.getElementById("reset").onclick = () => {
+    document.getElementById("reset").onclick = async () => {
       const ok = prompt("Type RESET to confirm reset:");
-      if (ok === "RESET") write(0);
+      if (ok === "RESET") await ref.set(0);
     };
-
-    // live update if something else changes it
-    window.addEventListener("storage", (e) => {
-      if (e.key === key) render();
-    });
-
-    render();
   </script>
 </body>
 </html>
