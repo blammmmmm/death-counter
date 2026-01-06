@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Death Counter Controller</title>
+  <style>
+    :root{ --green:#9cff57; }
+    body{
+      margin:0; padding:22px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background:#0b0f0b; color:var(--green);
+    }
+    .card{
+      max-width:520px;
+      border:1px solid rgba(156,255,87,.25);
+      border-radius:14px;
+      padding:18px;
+      box-shadow: 0 0 24px rgba(156,255,87,.08);
+    }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    button, input{
+      border-radius:12px;
+      border:1px solid rgba(156,255,87,.25);
+      background: rgba(156,255,87,.06);
+      color:var(--green);
+      padding:12px 14px;
+      font-size:16px;
+    }
+    button{ cursor:pointer; }
+    button:hover{ background: rgba(156,255,87,.12); }
+    .big{ font-size:20px; font-weight:800; }
+    .muted{ opacity:.75; font-size:13px; margin-top:8px; line-height:1.4; }
+    .count{ font-size:44px; font-weight:900; margin-top:10px; }
+    .danger{ border-color: rgba(255,87,87,.35); color:#ff9a9a; background: rgba(255,87,87,.06); }
+    .danger:hover{ background: rgba(255,87,87,.12); }
+    input{ width:160px; }
+    .pill{
+      display:inline-block;
+      padding:6px 10px;
+      border:1px solid rgba(156,255,87,.25);
+      border-radius:999px;
+      margin-top:10px;
+      font-size:12px;
+      opacity:.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="big">DEATH COUNTER CONTROLLER</div>
+    <div class="pill" id="roomTag"></div>
+
+    <div class="count" id="count">0</div>
+
+    <div class="row">
+      <button id="plus">+1 Death</button>
+      <button id="minus">-1 Undo</button>
+      <button class="danger" id="reset">Reset</button>
+    </div>
+
+    <div class="row">
+      <input id="setInput" type="number" min="0" step="1" placeholder="Set to…" />
+      <button id="setBtn">Set</button>
+    </div>
+
+    <div class="muted">
+      Reset requires typing <b>RESET</b> to confirm. This syncs instantly to the overlay as long as both are on the same GitHub Pages domain.
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const room = params.get("room") || "main";
+    const key = `deathCounter:${room}`;
+
+    const countEl = document.getElementById("count");
+    const roomTag = document.getElementById("roomTag");
+    roomTag.textContent = `room=${room}`;
+
+    function read(){
+      const n = Number(localStorage.getItem(key));
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    }
+    function write(n){
+      localStorage.setItem(key, String(Math.max(0, Math.floor(n))));
+      render();
+    }
+    function render(){
+      countEl.textContent = String(read());
+    }
+
+    document.getElementById("plus").onclick = () => write(read() + 1);
+    document.getElementById("minus").onclick = () => write(read() - 1);
+
+    document.getElementById("setBtn").onclick = () => {
+      const val = Number(document.getElementById("setInput").value);
+      if (!Number.isFinite(val)) return;
+      write(val);
+    };
+
+    document.getElementById("reset").onclick = () => {
+      const ok = prompt("Type RESET to confirm reset:");
+      if (ok === "RESET") write(0);
+    };
+
+    // live update if something else changes it
+    window.addEventListener("storage", (e) => {
+      if (e.key === key) render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
